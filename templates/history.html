@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>История проверок на плагиат</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .highlighted-content {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .highlighted-content span {
+            background-color: yellow;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>История проверок на плагиат</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert" onclick="this.classList.add('d-none');">
+                        {{ message }}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% if history %}
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Файл 1</th>
+                        <th>Файл 2</th>
+                        <th>Сходство</th>
+                        <th>Дата сравнения</th>
+                        {% if is_admin %}
+                            <th>Пользователь</th>
+                        {% endif %}
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in history %}
+                        <tr>
+                            <td>{{ item.id }}</td>
+                            <td>{{ item.file1 }}</td>
+                            <td>{{ item.file2 }}</td>
+                            <td>
+                                <span class="similarity-icon {% if item.similarity > 70 %}very high{% elif item.similarity > 50 %}high{% elif item.similarity > 30 %}medium{% else %}low{% endif %}"></span>
+                                {{ "%.2f"|format(item.similarity) }}%
+                            </td>
+                            <td>{{ item.comparison_date.strftime('%Y-%m-%d %H:%M:%S') if item.comparison_date else 'N/A' }}</td>
+                            {% if is_admin %}
+                                <td>{{ item.user }}</td>
+                            {% endif %}
+                            <td>
+                                <button type="button" class="btn btn-info btn-sm" data-toggle="collapse" data-target="#content-{{ item.id }}">Show Content</button>
+                                <button type="button" class="btn btn-danger btn-sm" data-id="{{ item.id }}" data-toggle="modal" data-target="#deleteConfirmModal">Delete</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="{% if is_admin %}7{% else %}6{% endif %}">
+                                <div id="content-{{ item.id }}" class="collapse">
+                                    <h5>Highlighted Content for {{ item.file1 }}</h5>
+                                    <div class="highlighted-content">
+                                        {{ item.highlighted_content1 | safe }}
+                                    </div>
+                                    <h5>Highlighted Content for {{ item.file2 }}</h5>
+                                    <div class="highlighted-content">
+                                        {{ item.highlighted_content2 | safe }}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <ul class="pagination">
+                {% if page > 1 %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('history', page=page-1) }}">Previous</a></li>
+                {% endif %}
+
+                {% for p in range(1, total_pages + 1) %}
+                    <li class="page-item {% if p == page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('history', page=p) }}">{{ p }}</a>
+                    </li>
+                {% endfor %}
+
+                {% if page < total_pages %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('history', page=page+1) }}">Next</a></li>
+                {% endif %}
+            </ul>
+        {% else %}
+            <p>No history available.</p>
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Назад к панели управления</a>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1" role="dialog" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteConfirmModalLabel">Confirm Deletion</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    Are you sure you want to delete this record?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <form id="deleteForm" method="post">
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script>
+        // Function to set form action when the modal is triggered
+        $('#deleteConfirmModal').on('show.bs.modal', function (event) {
+            var button = $(event.relatedTarget); // Button that triggered the modal
+            var id = button.data('id'); // Extract info from data-* attributes
+            var form = $('#deleteForm'); // Get the form
+
+            // Update the form action dynamically
+            form.attr('action', '/delete/' + id);
+        });
+    </script>
+</body>
+</html>

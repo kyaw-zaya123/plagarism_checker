@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Admin Dashboard</h1>
+
+<h2>Users</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Admin</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for user in users %}
+        <tr>
+            <td>{{ user.id }}</td>
+            <td>{{ user.username }}</td>
+            <td>{{ user.email }}</td>
+            <td>{{ 'Yes' if user.is_admin else 'No' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>Recent Comparisons</h2>
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>File 1</th>
+            <th>File 2</th>
+            <th>Similarity</th>
+            <th>Date</th>
+            <th>User</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for comparison in comparisons %}
+        <tr>
+            <td>{{ comparison.id }}</td>
+            <td>{{ comparison.file1 }}</td>
+            <td>{{ comparison.file2 }}</td>
+            <td>{{ comparison.similarity }}%</td>
+            <td>{{ comparison.comparison_date }}</td>
+            <td>{{ comparison.user }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

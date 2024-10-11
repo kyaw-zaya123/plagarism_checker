@@ -1,0 +1,345 @@
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    color: #42586d; 
+    background: rgba(89, 153, 89, 0.095); 
+    margin: 0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    background-color: #81d4fa;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); 
+}
+
+h1 {
+    text-align: center;
+    color: #0d47a1; /* Deep blue for headers */
+}
+
+/* Form styles */
+form {
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group + .form-group {
+    margin-top: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #1e88e5; 
+}
+
+.form-group input[type="file"],
+.form-group input[type="number"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #bdbdbd;
+    border-radius: 4px;
+    margin-top: 5px;
+}
+
+.form-group input[type="file"].error {
+    border-color: #e57373;
+}
+
+.form-group button {
+    display: inline-block;
+    background-color: #42a5f5; /* Light blue button */
+    color: #fff;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-top: 25px;
+}
+
+.form-group button:hover {
+    background-color: #1e88e5; /* Darker blue on hover */
+}
+
+.error-message {
+    color: #d32f2f; /* Red for error messages */
+    margin-top: 10px;
+}
+
+/* Table styles */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+table, th, td {
+    border: 1px solid #4fc3f7; /* Light blue for table borders */
+}
+
+th, td {
+    padding: 12px;
+    text-align: left;
+}
+
+th {
+    background-color: #bbdefb; /* Light blue background for table headers */
+    font-weight: bold;
+}
+
+/* Similarity color coding */
+.similarity-high {
+    background-color: #ff8a80; /* Red for high similarity */
+}
+
+.similarity-medium {
+    background-color: #fff59d; /* Yellow for medium similarity */
+}
+
+.similarity-low {
+    background-color: #a5d6a7; /* Green for low similarity */
+}
+
+/* Comparison details */
+.comparison-details {
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    padding: 15px;
+    border-radius: 5px;
+    background-color: #f5f5f5; /* Light gray background for details */
+}
+
+.highlighted-text {
+    background-color: #f9f9f9;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.toggle-highlight {
+    cursor: pointer;
+    color: #42a5f5;
+    text-decoration: underline;
+}
+
+/* Button styles */
+.back-button,
+.button {
+    display: inline-block;
+    background-color: #42a5f5; /* Same light blue for buttons */
+    color: #fff;
+    padding: 10px 15px;
+    text-decoration: none;
+    border-radius: 4px;
+    margin-right: 10px;
+}
+
+.back-button:hover,
+.button:hover {
+    background-color: #1e88e5; /* Darker blue on hover */
+}
+
+/* History table styles */
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.history-table th,
+.history-table td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+}
+
+.history-table th {
+    background-color: #bbdefb;
+    font-weight: bold;
+}
+
+.history-table tr:nth-child(even) {
+    background-color: #e3f2fd;
+}
+
+.history-table tr:hover {
+    background-color: #f5f5f5;
+}
+
+.history-table td {
+    vertical-align: top;
+}
+
+.history-table td:nth-child(2) {
+    white-space: nowrap;
+}
+
+.history-table .file-name {
+    display: inline-block;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Responsive design */
+@media (max-width: 900px) {
+    .container {
+        padding: 10px;
+    }
+
+    .form-group button {
+        width: 100%;
+    }
+
+    .history-table th,
+    .history-table td {
+        padding: 8px;
+    }
+}
+
+.alert-dismissible {
+    cursor: pointer;
+}
+
+.similarity-icon {
+    display: inline-block;
+    width: 12px;  
+    height: 12px; 
+    border-radius: 50%; 
+    margin-right: 5px; 
+}
+
+.similarity-icon.veryhigh {
+    background-color: rgb(253, 6, 6);
+}
+.similarity-icon.high {
+    background-color: #cd974b;
+}
+.similarity-icon.medium {
+    background-color: #99ba46; 
+}
+
+.similarity-icon.low {
+    background-color: #7fc482; 
+}
+
+.dashboard-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(65, 63, 63, 0.1);
+}
+
+.dashboard-card h3 {
+    margin-top: 0;
+    color: #2c3e50;
+}
+
+.dashboard-stat {
+    font-size: 24px;
+    font-weight: bold;
+    color: #42a5f5;
+}
+
+.chart-container {
+    height: 300px;
+}
+
+/* Navbar styles */
+.navbar {
+    margin-bottom: 20px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .dashboard-card {
+        padding: 15px;
+    }
+    .dashboard-stat {
+        font-size: 20px;
+    }
+    .chart-container {
+        height: 200px;
+    }
+}
+
+.nav-link i {
+    margin-right: 5px; 
+    font-size: 1.1em; 
+}
+
+.container {
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 1200px;
+    margin: 50px auto;
+}
+
+
+.navbar-brand img {
+    border-radius: 50%;  
+    margin-right: 10px;  
+}
+
+.navbar {
+    padding: 10px 20px;
+}
+
+
+.contact-button {
+    display: flex;
+    align-items: center;
+    background: linear-gradient(90deg, #d7dadd, #0056b3);
+    background-size: 200% 200%;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 25px;
+    text-decoration: none;
+    box-shadow: 0 4px 10px rgb(247, 246, 246);
+    transition: transform 0.3s ease;
+    animation: running-color 5s ease infinite; 
+}
+
+.contact-button:hover {
+    transform: translateY(-2px);
+}
+
+.contact-button .icon {
+    margin-right: 8px;
+}
+
+.contact-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+}
+
+@keyframes running-color {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+

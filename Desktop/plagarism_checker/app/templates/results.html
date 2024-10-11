@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Результаты проверки на плагиат</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f0f0f0; }
+        .container { max-width: 1000px; margin: 0 auto; background-color: rgb(144, 196, 239); padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #161716; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 30px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        tr:hover { background-color: #f5f5f5; }
+        .similarity-high { color: #d32f2f; }
+        .similarity-medium { color: #f59300; }
+        .similarity-low { color: #388e3c; }
+        .back-button { display: inline-block; margin-top: 20px; padding: 10px 15px; background-color: #007bff; color: #fff; text-decoration: none; border-radius: 5px; }
+        .back-button:hover { background-color: #0056b3; }
+        .highlighted-text { white-space: pre-wrap; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-top: 10px; }
+        .comparison-details { margin-bottom: 30px; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
+        .toggle-highlight { cursor: pointer; color: #1d1e1d; }
+        .toggle-highlight:hover { text-decoration: underline; }
+        .file-icon {
+            margin-right: 5px;
+        }
+        .file-name {
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Результаты проверки на плагиат</h1>
+        {% if results %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Файл 1</th>
+                        <th>Файл 2</th>
+                        <th>Сходство</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for file1, file2, similarity, _, _ in results %}
+                        <tr>
+                            <td>
+                                <i class="file-icon {{ get_file_icon(file1) }}"></i>
+                                {{ file1.split('\\')[-1] }}
+                            </td>
+                            <td>
+                                <i class="file-icon {{ get_file_icon(file2) }}"></i>
+                                {{ file2.split('\\')[-1] }}
+                            </td>
+                            <td class="
+                                {% if similarity > 70 %}similarity-very high
+                                {% elif similarity > 50 %}similarity-high
+                                {% elif similarity > 30 %}similarity-medium
+                                {% else %}similarity-low
+                                {% endif %}
+                            ">
+                                {{ "%.2f"|format(similarity) }}%
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <h2>Подробные результаты сравнения</h2>
+            {% for file1, file2, similarity, highlighted_file1, highlighted_file2 in results %}
+                <div class="comparison-details">
+                    <h3>
+                        <span class="file-name">
+                            <i class="file-icon {{ get_file_icon(file1) }}"></i>
+                            {{ file1.split('\\')[-1] }}
+                        </span>
+                        и
+                        <span class="file-name">
+                            <i class="file-icon {{ get_file_icon(file2) }}"></i>
+                            {{ file2.split('\\')[-1] }}
+                        </span>
+                        (Сходство: {{ "%.2f"|format(similarity) }}%)
+                    </h3>
+                    <p class="toggle-highlight" onclick="toggleHighlight('highlight-{{ loop.index }}')">Показать/скрыть выделенный текст</p>
+                    <div id="highlight-{{ loop.index }}" style="display: none;">
+                        <h4>Текст из {{ file1.split('\\')[-1] }}:</h4>
+                        <div class="highlighted-text">{{ highlighted_file1 | safe }}</div>
+                        <h4>Текст из {{ file2.split('\\')[-1] }}:</h4>
+                        <div class="highlighted-text">{{ highlighted_file2 | safe }}</div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>Результаты не найдены.</p>
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Назад к панели управления</a>
+    </div>
+    
+    <script>
+        function toggleHighlight(id) {
+            var element = document.getElementById(id);
+            if (element.style.display === "none") {
+                element.style.display = "block";
+            } else {
+                element.style.display = "none";
+            }
+        }
+    </script>
+</body>
+</html>

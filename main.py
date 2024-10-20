@@ -61,50 +61,6 @@ def create_database_connection():
         print(f"Error while connecting to MySQL: {e}")
     return None
 
-def create_tables():
-    """Create necessary tables if they don't exist"""
-    connection = create_database_connection()
-    if connection:
-        try:
-            cursor = connection.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS files (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    filename VARCHAR(255) NOT NULL,
-                    content TEXT NOT NULL,
-                    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS files (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    username VARCHAR(50) NOT NULL UNIQUE,
-                    password VARCHAR(255) NOT NULL,
-                    email VARCHAR(100) NOT NULL UNIQUE
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS comparisons (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT,  -- Add user_id column
-                    file1_id INT,
-                    file2_id INT,
-                    similarity FLOAT,
-                    comparison_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,  -- Reference to users table
-                    FOREIGN KEY (file1_id) REFERENCES files(id) ON DELETE CASCADE,
-                    FOREIGN KEY (file2_id) REFERENCES files(id) ON DELETE CASCADE
-                )
-            """)
-
-            connection.commit()
-        except Error as e:
-            print(f"Error creating tables: {e}")
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
-
 @login_manager.user_loader
 def load_user(user_id):
     connection = create_database_connection()
@@ -745,6 +701,5 @@ def delete_comparison(comparison_id):
     return redirect(url_for('admin_dashboard'))
 
 if __name__ == '__main__':
-    create_tables()
     alter_comparisons_table()
     app.run(debug=True)

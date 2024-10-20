@@ -16,7 +16,6 @@ This project helps individuals and institutions, such as universities and conten
 - **Detailed Comparison Reports**: Get a detailed view of text similarities with highlighted sections.
 - **User Authentication**: Allows users to create accounts and access their plagiarism check history.
 - **Admin Dashboard**: Admins can manage all user data and view comparison history for all users.
-- **API Access**: API endpoints for integration with other systems like project management or student submission systems.
 - **Privacy and Security**: All user files and history are securely managed, ensuring data protection.
 
 ## Installation Instructions

@@ -1,3 +1,4 @@
+#main.py
 import os
 import docx
 import pdfplumber
@@ -6,7 +7,7 @@ from flask_bcrypt import Bcrypt
 from functools import wraps
 from werkzeug.security import generate_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, request, jsonify, render_template, redirect, flash, url_for
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import nltk
@@ -60,50 +61,6 @@ def create_database_connection():
     except Error as e:
         print(f"Error while connecting to MySQL: {e}")
     return None
-
-def create_tables():
-    """Create necessary tables if they don't exist"""
-    connection = create_database_connection()
-    if connection:
-        try:
-            cursor = connection.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS files (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    filename VARCHAR(255) NOT NULL,
-                    content TEXT NOT NULL,
-                    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS files (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    username VARCHAR(50) NOT NULL UNIQUE,
-                    password VARCHAR(255) NOT NULL,
-                    email VARCHAR(100) NOT NULL UNIQUE
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS comparisons (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT,  -- Add user_id column
-                    file1_id INT,
-                    file2_id INT,
-                    similarity FLOAT,
-                    comparison_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,  -- Reference to users table
-                    FOREIGN KEY (file1_id) REFERENCES files(id) ON DELETE CASCADE,
-                    FOREIGN KEY (file2_id) REFERENCES files(id) ON DELETE CASCADE
-                )
-            """)
-
-            connection.commit()
-        except Error as e:
-            print(f"Error creating tables: {e}")
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -285,8 +242,6 @@ def get_file_icon(filename):
     }
     return icon_map.get(extension, 'fas fa-file')
 
-from functools import wraps
-
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -421,6 +376,36 @@ def register():
                     connection.close()
 
     return render_template('register.html')
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    data = request.json
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+
+    connection = create_database_connection()
+    if connection:
+        try:
+            cursor = connection.cursor()
+
+            cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+            existing_user = cursor.fetchone()
+            if existing_user:
+                return jsonify({"message": "Username already exists"}), 400
+
+            hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+            cursor.execute("INSERT INTO users (username, email, password, is_admin) VALUES (%s, %s, %s, %s)", (username, email, hashed_password, False))
+            connection.commit()
+
+            return jsonify({"message": "User registered successfully"}), 201
+        except mysql.connector.Error as e:
+            print(f"Error during API registration: {e}")
+            connection.rollback()
+            return jsonify({"message": "Registration failed"}), 500
+        finally:
+            cursor.close()
+            connection.close()
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -741,10 +726,8 @@ def delete_comparison(comparison_id):
             if connection.is_connected():
                 cursor.close()
                 connection.close()
-    
     return redirect(url_for('admin_dashboard'))
 
 if __name__ == '__main__':
-    create_tables()
     alter_comparisons_table()
     app.run(debug=True)

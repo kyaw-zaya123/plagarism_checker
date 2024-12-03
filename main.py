@@ -6,7 +6,7 @@ from flask_bcrypt import Bcrypt
 from functools import wraps
 from werkzeug.security import generate_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, request, render_template, redirect, flash, url_for, jsonify
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import nltk
@@ -15,8 +15,26 @@ from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
 import mysql.connector
 from mysql.connector import Error
-import time
+import datetime
 import json
+
+# Swagger and Marshmallow imports
+from flasgger import Swagger
+from marshmallow import Schema, fields, validate
+class UserRegistrationSchema(Schema):
+    username = fields.Str(
+        required=True, 
+        validate=[
+            validate.Length(min=3, max=50)
+        ]
+    )
+    email = fields.Email(required=True)  
+    password = fields.Str(
+        required=True, 
+        validate=[
+            validate.Length(min=5)  
+        ]
+    )
 
 nltk.download('punkt')
 nltk.download('wordnet')
@@ -25,6 +43,32 @@ nltk.download('stopwords')
 app = Flask(__name__, template_folder='templates')
 app.secret_key = '9393c60074ab53a68d814334382cff7f'
 bcrypt = Bcrypt(app)
+
+# Swagger configuration
+swagger_config = {
+    "headers": [],
+    "specs": [
+        {
+            "endpoint": 'apispec_1',
+            "route": '/apispec_1.json',
+            "rule_filter": lambda rule: True,  # all in
+            "model_filter": lambda tag: True,  # all in
+        }
+    ],
+    "static_url_path": "/flasgger_static",
+    "swagger_ui": True,
+    "specs_route": "/apidocs/",
+    "title": "Plagiarism Checker API",
+    "description": "API for Plagiarism Detection Application",
+    "version": "1.0.0"
+}
+Swagger(app, config=swagger_config)
+
+# Request Schema for Login
+class UserLoginSchema(Schema):
+    username = fields.Str(required=True)
+    email = fields.Str(required=True)
+    password = fields.Str(required=True)
 
 from flask_login import UserMixin
 login_manager = LoginManager(app)
@@ -69,7 +113,6 @@ def load_user(user_id):
             cursor = connection.cursor(dictionary=True)
             cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
             user = cursor.fetchone()
-
             if user:
                 return User(id=user['id'], username=user['username'], password=user['password'], is_admin=user['is_admin'])
         except Error as e:
@@ -116,7 +159,6 @@ def convert_file(file_path, skip_first_page=True):
     if file_extension == 'docx':
         doc = docx.Document(file_path)
         if skip_first_page:
-            # Find the start of the second page
             second_page_start = 0
             for i, para in enumerate(doc.paragraphs):
                 if para.runs and para.runs[0].element.xpath('.//w:br[@w:type="page"]'):
@@ -134,13 +176,11 @@ def convert_file(file_path, skip_first_page=True):
             html_content = html_file.read()
             text = html2text(html_content)
             if skip_first_page:
-                # Approximate first page as first 1500 characters
                 text = text[1500:]
-    else:  # For plain text files
+    else:
         with open(file_path, 'r', encoding='utf-8') as text_file:
             lines = text_file.readlines()
             if skip_first_page:
-                # Estimate the first page as the first 50 lines (adjust as needed)
                 text = ''.join(lines[50:])
             else:
                 text = ''.join(lines)
@@ -189,13 +229,10 @@ def save_comparison_to_db(file1_id, file2_id, similarity, user_id, highlighted_c
 
 def compare_files(file_paths, user_id):
     """Compare files for plagiarism and return results, ignoring the first page of each file."""
-    file_contents = [convert_file(file_path, skip_first_page=True) for file_path in file_paths]
-    
+    file_contents = [convert_file(file_path, skip_first_page=True) for file_path in file_paths]   
     vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform(file_contents)
-    
+    tfidf_matrix = vectorizer.fit_transform(file_contents)   
     cosine_sim = cosine_similarity(tfidf_matrix)
-
     results = []
     file_ids = []
     for file_path, content in zip(file_paths, file_contents):
@@ -204,7 +241,6 @@ def compare_files(file_paths, user_id):
             file_ids.append(file_id)
         else:
             print(f"Error: Could not save file {file_path} to database")
-
     for i in range(len(file_ids)):
         for j in range(i + 1, len(file_ids)):
             similarity = float(cosine_sim[i][j] * 100)
@@ -220,14 +256,12 @@ def highlight_similar_parts(text1, text2):
     """Highlight similar parts of two texts."""
     tokens1 = text1.split()
     tokens2 = set(text2.split())
-
     highlighted_tokens = []
     for token in tokens1:
         if token in tokens2:
             highlighted_tokens.append(f'<span style="background-color: yellow;">{token}</span>')
         else:
             highlighted_tokens.append(token)
-
     return ' '.join(highlighted_tokens)
 
 def get_file_icon(filename):
@@ -240,8 +274,6 @@ def get_file_icon(filename):
         'html': 'fas fa-file-code',
     }
     return icon_map.get(extension, 'fas fa-file')
-
-from functools import wraps
 
 def admin_required(f):
     @wraps(f)
@@ -280,8 +312,7 @@ def admin_dashboard():
         finally:
             if connection.is_connected():
                 cursor.close()
-                connection.close()
-    
+                connection.close()   
     return render_template('admin_dashboard.html', users=users, comparisons=comparisons)
 
 @app.route('/dashboard')
@@ -290,8 +321,7 @@ def dashboard():
     connection = create_database_connection()
     if connection:
         try:
-            cursor = connection.cursor(dictionary=True)
-            
+            cursor = connection.cursor(dictionary=True)           
             cursor.execute("SELECT COUNT(*) as total FROM comparisons WHERE user_id = %s", (current_user.id,))
             total_comparisons = cursor.fetchone()['total']
             
@@ -312,8 +342,7 @@ def dashboard():
                 WHERE user_id = %s
                 GROUP BY category
             """, (current_user.id,))
-            similarity_distribution = {row['category']: row['count'] for row in cursor.fetchall()}
-            
+            similarity_distribution = {row['category']: row['count'] for row in cursor.fetchall()}           
             cursor.execute("""
                 SELECT c.id, f1.filename AS file1, f2.filename AS file2, c.similarity, c.comparison_date
                 FROM comparisons c
@@ -335,82 +364,12 @@ def dashboard():
         finally:
             if connection.is_connected():
                 cursor.close()
-                connection.close()
-    
+                connection.close()   
     return render_template('dashboard.html', 
                            total_comparisons=0,
                            avg_similarity=0.0,
                            similarity_distribution=json.dumps({}),
                            recent_comparisons=[])
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        email = request.form['email']
-        connection = create_database_connection()
-        if connection:
-            try:
-                cursor = connection.cursor()
-
-                cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-                existing_user = cursor.fetchone()
-                if existing_user:
-                    flash('Username already exists','danger')
-                    return redirect(url_for('register'))
-
-                hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-                cursor.execute("INSERT INTO users (username,email, password, is_admin) VALUES (%s, %s, %s, %s)", (username,email, hashed_password, False))
-                connection.commit()
-
-                flash('Account created successfully! You can now log in.', 'success')
-                return redirect(url_for('login'))
-
-            except Error as e:
-                print(f"Error during registration: {e}")
-                connection.rollback()
-                flash('Error during registration. Please try again.', 'danger')
-            finally:
-                if connection.is_connected():
-                    cursor.close()
-                    connection.close()
-
-    return render_template('register.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        connection = create_database_connection()
-        if connection:
-            try:
-                cursor = connection.cursor(dictionary=True)
-
-                cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-                user = cursor.fetchone()
-
-                if user and bcrypt.check_password_hash(user['password'], password):
-                    user_obj = User(id=user['id'], username=user['username'], password=user['password'], is_admin=user['is_admin'])
-                    login_user(user_obj)
-                    flash('Logged in successfully')
-                    if user['is_admin']:
-                        return redirect(url_for('admin_dashboard'))
-                    else:
-                        return redirect(url_for('index'))
-                else:
-                    flash('Invalid username or password')
-
-            except Error as e:
-                print(f"Error during login: {e}")
-
-            finally:
-                if connection.is_connected():
-                    cursor.close()
-                    connection.close()
-
-    return render_template('login.html')
 
 @app.route('/logout')
 def logout():
@@ -536,8 +495,7 @@ def contact():
 def submit_contact():
     name = request.form['name']
     email = request.form['email']
-    message = request.form['message']
-    
+    message = request.form['message']    
     connection = create_database_connection()  
     if connection:
         try:
@@ -570,8 +528,7 @@ def edit_user(user_id):
             if request.method == 'POST':
                 new_username = request.form['username']
                 new_email = request.form['email']
-                is_admin = 'is_admin' in request.form
-                
+                is_admin = 'is_admin' in request.form                
                 cursor.execute("""
                     UPDATE users 
                     SET username = %s, email = %s, is_admin = %s 
@@ -613,16 +570,9 @@ def delete_user(user_id):
     if connection:
         try:
             cursor = connection.cursor()
-            
-            # Delete user's comparisons
             cursor.execute("DELETE FROM comparisons WHERE user_id = %s", (user_id,))
-            
-            # Delete user's files
             cursor.execute("DELETE FROM files WHERE user_id = %s", (user_id,))
-            
-            # Delete the user
-            cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
-            
+            cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))            
             connection.commit()
             flash('User and all associated data deleted successfully', 'success')
         
@@ -682,10 +632,7 @@ def delete_comparison(comparison_id):
     if connection:
         try:
             cursor = connection.cursor()
-            
-            # Delete the comparison
-            cursor.execute("DELETE FROM comparisons WHERE id = %s", (comparison_id,))
-            
+            cursor.execute("DELETE FROM comparisons WHERE id = %s", (comparison_id,))           
             connection.commit()
             flash('Comparison deleted successfully', 'success')
         
@@ -697,9 +644,201 @@ def delete_comparison(comparison_id):
             if connection.is_connected():
                 cursor.close()
                 connection.close()
-    
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """
+    Register a new user
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            username:
+              type: string
+              description: Username for the new user
+              minLength: 3
+              maxLength: 50
+            email:
+              type: string
+              format: email
+            password:
+              type: string
+              minLength: 6
+    responses:
+      200:
+        description: User registered successfully
+      400:
+        description: Registration error
+    """
+    if request.method == 'POST':
+        # Validate request body
+        try:
+            UserRegistrationSchema().load(request.form)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+        username = request.form['username']
+        password = request.form['password']
+        email = request.form['email']
+        
+        connection = create_database_connection()
+        if connection:
+            try:
+                cursor = connection.cursor()
+                cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+                existing_user = cursor.fetchone()
+                
+                if existing_user:
+                    return jsonify({"error": "Username already exists"}), 400
+                
+                hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+                cursor.execute("INSERT INTO users (username, email, password, is_admin) VALUES (%s, %s, %s, %s)", 
+                               (username, email, hashed_password, False))
+                connection.commit()
+                
+                return jsonify({"message": "Account created successfully"}), 201
+
+            except Error as e:
+                print(f"Error during registration: {e}")
+                connection.rollback()
+                return jsonify({"error": "Error during registration"}), 500
+            finally:
+                if connection.is_connected():
+                    cursor.close()
+                    connection.close()
+
+    # For GET request, return registration form
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """
+    User Login
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            username:
+              type: string
+              description: Username of the user
+            password:
+              type: string
+              description: Password of the user
+    responses:
+      200:
+        description: User logged in successfully
+      401:
+        description: Invalid credentials
+    """
+    if request.method == 'POST':
+        # Validate request body
+        try:
+            UserLoginSchema().load(request.form)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+        username = request.form['username']
+        password = request.form['password']
+        
+        connection = create_database_connection()
+        if connection:
+            try:
+                cursor = connection.cursor(dictionary=True)
+                cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+                user = cursor.fetchone()
+
+                if user and bcrypt.check_password_hash(user['password'], password):
+                    user_obj = User(id=user['id'], username=user['username'], 
+                                    password=user['password'], is_admin=user['is_admin'])
+                    login_user(user_obj)
+                    return jsonify({
+                        "message": "Logged in successfully", 
+                        "is_admin": user['is_admin']
+                    }), 200
+                else:
+                    return jsonify({"error": "Invalid username or password"}), 401
+
+            except Error as e:
+                print(f"Error during login: {e}")
+                return jsonify({"error": "Server error during login"}), 500
+            finally:
+                if connection.is_connected():
+                    cursor.close()
+                    connection.close()
+
+    return render_template('login.html')
+
+@app.route('/compare-files', methods=['POST'])
+@login_required
+def compare_files_api():
+    """
+    Compare files for plagiarism
+    ---
+    tags:
+      - Plagiarism Checking
+    parameters:
+      - in: formData
+        name: files
+        type: file
+        required: true
+        description: Files to compare for plagiarism
+    responses:
+      200:
+        description: Successful file comparison
+      400:
+        description: Error in file comparison
+    """
+    if 'files' not in request.files:
+        return jsonify({"error": "No files uploaded"}), 400
+    
+    uploaded_files = request.files.getlist('files')
+    if len(uploaded_files) < 2:
+        return jsonify({"error": "At least two files are required for comparison"}), 400
+    
+    # Save uploaded files temporarily
+    file_paths = []
+    for file in uploaded_files:
+        if file.filename == '':
+            continue
+        filename = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(filename)
+        file_paths.append(filename)
+    
+    try:
+        results = compare_files(file_paths, current_user.id)
+        return jsonify({
+            "message": "Files compared successfully",
+            "results": [
+                {
+                    "file1": os.path.basename(result[0]),
+                    "file2": os.path.basename(result[1]),
+                    "similarity": result[2]
+                } for result in results
+            ]
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        # Clean up temporary files
+        for path in file_paths:
+            if os.path.exists(path):
+                os.remove(path)
+
+# The rest of your existing code remains the same...
+
 if __name__ == '__main__':
-    alter_comparisons_table()
+    ensure_upload_folder_exists()
     app.run(debug=True)

@@ -17,24 +17,8 @@ import mysql.connector
 from mysql.connector import Error
 import datetime
 import json
-
-# Swagger and Marshmallow imports
-from flasgger import Swagger
-from marshmallow import Schema, fields, validate
-class UserRegistrationSchema(Schema):
-    username = fields.Str(
-        required=True, 
-        validate=[
-            validate.Length(min=3, max=50)
-        ]
-    )
-    email = fields.Email(required=True)  
-    password = fields.Str(
-        required=True, 
-        validate=[
-            validate.Length(min=5)  
-        ]
-    )
+import uuid
+from werkzeug.utils import secure_filename
 
 nltk.download('punkt')
 nltk.download('wordnet')
@@ -43,6 +27,11 @@ nltk.download('stopwords')
 app = Flask(__name__, template_folder='templates')
 app.secret_key = '9393c60074ab53a68d814334382cff7f'
 bcrypt = Bcrypt(app)
+
+# Swagger and Marshmallow imports
+from flasgger import Swagger
+from marshmallow import Schema, fields, validate
+
 
 # Swagger configuration
 swagger_config = {
@@ -63,6 +52,21 @@ swagger_config = {
     "version": "1.0.0"
 }
 Swagger(app, config=swagger_config)
+
+class UserRegistrationSchema(Schema):
+    username = fields.Str(
+        required=True, 
+        validate=[
+            validate.Length(min=3, max=50)
+        ]
+    )
+    email = fields.Email(required=True)  
+    password = fields.Str(
+        required=True, 
+        validate=[
+            validate.Length(min=5)  
+        ]
+    )
 
 # Request Schema for Login
 class UserLoginSchema(Schema):
@@ -670,7 +674,7 @@ def register():
               format: email
             password:
               type: string
-              minLength: 6
+              minLength: 5
     responses:
       200:
         description: User registered successfully
@@ -678,41 +682,63 @@ def register():
         description: Registration error
     """
     if request.method == 'POST':
-        # Validate request body
-        try:
-            UserRegistrationSchema().load(request.form)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 400
-
-        username = request.form['username']
-        password = request.form['password']
-        email = request.form['email']
+        # Check if the request is in JSON format
+        if not request.is_json:
+            return jsonify({"error": "Request must be in JSON format"}), 400
         
-        connection = create_database_connection()
-        if connection:
-            try:
-                cursor = connection.cursor()
-                cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-                existing_user = cursor.fetchone()
-                
-                if existing_user:
-                    return jsonify({"error": "Username already exists"}), 400
-                
-                hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-                cursor.execute("INSERT INTO users (username, email, password, is_admin) VALUES (%s, %s, %s, %s)", 
-                               (username, email, hashed_password, False))
-                connection.commit()
-                
-                return jsonify({"message": "Account created successfully"}), 201
+        try:
+            # Get the JSON data from the request
+            data = request.get_json()
 
-            except Error as e:
-                print(f"Error during registration: {e}")
-                connection.rollback()
-                return jsonify({"error": "Error during registration"}), 500
-            finally:
-                if connection.is_connected():
-                    cursor.close()
-                    connection.close()
+            # Extract the username, email, and password from the request data
+            username = data.get('username')
+            password = data.get('password')
+            email = data.get('email')
+
+            # Validate the data
+            if not username or not password or not email:
+                return jsonify({"error": "Username, email, and password are required"}), 400
+
+            if len(username) < 3 or len(username) > 50:
+                return jsonify({"error": "Username must be between 3 and 50 characters"}), 400
+
+            if len(password) < 5:
+                return jsonify({"error": "Password must be at least 5 characters long"}), 400
+
+            # Connect to the database and check if the username already exists
+            connection = create_database_connection()
+            if connection:
+                try:
+                    cursor = connection.cursor(dictionary=True)
+
+                    # Check if the username already exists
+                    cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+                    existing_user = cursor.fetchone()
+
+                    if existing_user:
+                        return jsonify({"error": "Username already exists"}), 400
+
+                    # Hash the password before storing it
+                    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+
+                    # Insert the new user into the database
+                    cursor.execute("INSERT INTO users (username, email, password, is_admin) VALUES (%s, %s, %s, %s)", 
+                                   (username, email, hashed_password, False))
+                    connection.commit()
+
+                    return jsonify({"message": "Account created successfully"}), 201
+
+                except Error as e:
+                    print(f"Error during registration: {e}")
+                    connection.rollback()
+                    return jsonify({"error": "Error during registration"}), 500
+                finally:
+                    if connection.is_connected():
+                        cursor.close()
+                        connection.close()
+
+        except Exception as e:
+            return jsonify({"error": f"Error: {str(e)}"}), 400
 
     # For GET request, return registration form
     return render_template('register.html')
@@ -744,15 +770,22 @@ def login():
         description: Invalid credentials
     """
     if request.method == 'POST':
-        # Validate request body
-        try:
-            UserLoginSchema().load(request.form)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 400
+        # Check if the request is in JSON format
+        if not request.is_json:
+            return jsonify({"error": "Request must be in JSON format"}), 400
 
-        username = request.form['username']
-        password = request.form['password']
-        
+        try:
+            data = request.get_json()
+            username = data['username']
+            password = data['password']
+        except KeyError:
+            return jsonify({"error": "Missing required fields: username or password"}), 400
+
+        # Validate if the fields are provided
+        if not username or not password:
+            return jsonify({"error": "Username and password are required"}), 400
+
+        # Connect to the database and authenticate the user
         connection = create_database_connection()
         if connection:
             try:
@@ -779,65 +812,152 @@ def login():
                     cursor.close()
                     connection.close()
 
+    # For GET request, return the login form
     return render_template('login.html')
+
+UPLOAD_FOLDER = r'C:\Users\kyawz\Desktop\plagarism_checker-1\uploads'
 
 @app.route('/compare-files', methods=['POST'])
 @login_required
 def compare_files_api():
     """
-    Compare files for plagiarism
+    Compare uploaded files for plagiarism
     ---
     tags:
       - Plagiarism Checking
     parameters:
       - in: formData
         name: files
-        type: file
         required: true
-        description: Files to compare for plagiarism
+        type: array
+        items:
+          type: file
+        description: List of files to compare. At least two files are required for comparison.
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              files:
+                type: array
+                items:
+                  type: string
+                  format: binary
+                description: List of files to compare (at least 2 files required)
+                minItems: 2
+                maxItems: 10
     responses:
       200:
-        description: Successful file comparison
+        description: File comparison results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                results:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      file1:
+                        type: string
+                        description: First file name
+                      file2:
+                        type: string
+                        description: Second file name
+                      similarity:
+                        type: number
+                        format: float
       400:
-        description: Error in file comparison
+        description: Invalid input (e.g., fewer than 2 files)
+      500:
+        description: Internal server error
     """
+    # Validate upload folder exists
+    ensure_upload_folder_exists()
+    
+    # Check if files are present in the request
     if 'files' not in request.files:
         return jsonify({"error": "No files uploaded"}), 400
     
     uploaded_files = request.files.getlist('files')
+    
+    # Validate number of files
     if len(uploaded_files) < 2:
         return jsonify({"error": "At least two files are required for comparison"}), 400
     
-    # Save uploaded files temporarily
-    file_paths = []
-    for file in uploaded_files:
-        if file.filename == '':
-            continue
-        filename = os.path.join(UPLOAD_FOLDER, file.filename)
-        file.save(filename)
-        file_paths.append(filename)
+    # Validate maximum number of files
+    if len(uploaded_files) > 10:
+        return jsonify({"error": "Maximum of 10 files allowed for comparison"}), 400
     
+    # Validate file types and sizes if needed
+    ALLOWED_EXTENSIONS = {'txt', 'pdf', 'docx', 'doc', 'rtf'}
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+    
+    file_paths = []
     try:
+        # Process and validate each uploaded file
+        for file in uploaded_files:
+            if not file or not file.filename:
+                continue
+            
+            # Check file extension
+            filename = secure_filename(file.filename)
+            file_ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+            if file_ext not in ALLOWED_EXTENSIONS:
+                return jsonify({
+                    "error": f"Invalid file type. Allowed types are: {', '.join(ALLOWED_EXTENSIONS)}"
+                }), 400
+            
+            # Check file size
+            file.seek(0, os.SEEK_END)
+            file_size = file.tell()
+            file.seek(0)
+            if file_size > MAX_FILE_SIZE:
+                return jsonify({
+                    "error": f"File {filename} exceeds maximum size of 10 MB"
+                }), 400
+            
+            # Save file
+            file_path = os.path.join(UPLOAD_FOLDER, f"{current_user.id}_{filename}")
+            file.save(file_path)
+            file_paths.append(file_path)
+        
+        # Perform file comparison
         results = compare_files(file_paths, current_user.id)
+        
+        # Return results as JSON
         return jsonify({
             "message": "Files compared successfully",
             "results": [
                 {
                     "file1": os.path.basename(result[0]),
                     "file2": os.path.basename(result[1]),
-                    "similarity": result[2]
+                    "similarity": round(result[2], 2)
                 } for result in results
             ]
         }), 200
+    
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        # Log the error for server-side tracking
+        app.logger.error(f"File comparison error: {str(e)}")
+        return jsonify({
+            "error": "An error occurred during file comparison", 
+            "details": str(e)
+        }), 500
+    
     finally:
         # Clean up temporary files
         for path in file_paths:
-            if os.path.exists(path):
-                os.remove(path)
-
-# The rest of your existing code remains the same...
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception as cleanup_error:
+                app.logger.warning(f"Error during file cleanup: {cleanup_error}")
 
 if __name__ == '__main__':
     ensure_upload_folder_exists()

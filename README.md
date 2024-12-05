@@ -54,10 +54,6 @@ Follow these steps to set up the project on your local machine.
      ```sql
      CREATE DATABASE plagiarism_checker;
      ```
-   - Run the SQL scripts in the `mysql/` directory to create necessary tables.
-     ```bash
-     mysql -u your_username -p plagiarism_checker < mysql/contact_messages.sql
-     ```
 
 5. **Configure the Application:**
    - Update the `config.py` file with your MySQL connection details.

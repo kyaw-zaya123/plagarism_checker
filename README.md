@@ -55,13 +55,6 @@ Follow these steps to set up the project on your local machine.
      CREATE DATABASE plagiarism_checker;
      ```
 
-5. **Configure the Application:**
-   - Update the `config.py` file with your MySQL connection details.
-     ```python
-     SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://your_username:your_password@localhost/plagiarism_checker'
-     ```
-   - Set environment variables for any API keys or sensitive information using a `.env` file.
-
 6. **Run the Application:**
    Start the Flask development server:
    ```bash

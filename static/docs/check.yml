@@ -1,0 +1,60 @@
+tags:
+  - File Comparison
+summary: Compare multiple files for plagiarism
+description: Upload files for plagiarism checking and compare them. Returns similarity results and highlighted text.
+operationId: compareFiles
+consumes:
+  - multipart/form-data
+parameters:
+  - in: formData
+    name: files
+    type: array
+    items:
+      type: file
+    required: true
+    description: Files to be compared. You can upload multiple files.
+  - in: formData
+    name: user_id
+    type: integer
+    required: true
+    description: User ID for saving the comparison results.
+responses:
+  200:
+    description: Files compared successfully
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          file1:
+            type: string
+            example: "document1.docx"
+          file2:
+            type: string
+            example: "document2.pdf"
+          similarity:
+            type: number
+            format: float
+            example: 85.67
+          highlighted_file1:
+            type: string
+            example: "highlighted_document1.docx"
+          highlighted_file2:
+            type: string
+            example: "highlighted_document2.pdf"
+  400:
+    description: Invalid input or file upload error
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Invalid files or missing user_id"
+  500:
+    description: Internal server error
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "An error occurred during file comparison"

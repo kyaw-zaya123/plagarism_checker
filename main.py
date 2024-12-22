@@ -1,3 +1,4 @@
+#main.py
 import os
 import docx
 import pdfplumber
@@ -17,8 +18,7 @@ import mysql.connector
 from mysql.connector import Error
 import datetime
 import json
-import uuid
-from werkzeug.utils import secure_filename
+from flasgger import Swagger, swag_from
 
 nltk.download('punkt')
 nltk.download('wordnet')
@@ -27,52 +27,7 @@ nltk.download('stopwords')
 app = Flask(__name__, template_folder='templates')
 app.secret_key = '9393c60074ab53a68d814334382cff7f'
 bcrypt = Bcrypt(app)
-
-# Swagger and Marshmallow imports
-from flasgger import Swagger
-from marshmallow import Schema, fields, validate
-
-
-# Swagger configuration
-swagger_config = {
-    "headers": [],
-    "specs": [
-        {
-            "endpoint": 'apispec_1',
-            "route": '/apispec_1.json',
-            "rule_filter": lambda rule: True,  # all in
-            "model_filter": lambda tag: True,  # all in
-        }
-    ],
-    "static_url_path": "/flasgger_static",
-    "swagger_ui": True,
-    "specs_route": "/apidocs/",
-    "title": "Plagiarism Checker API",
-    "description": "API for Plagiarism Detection Application",
-    "version": "1.0.0"
-}
-Swagger(app, config=swagger_config)
-
-class UserRegistrationSchema(Schema):
-    username = fields.Str(
-        required=True, 
-        validate=[
-            validate.Length(min=3, max=50)
-        ]
-    )
-    email = fields.Email(required=True)  
-    password = fields.Str(
-        required=True, 
-        validate=[
-            validate.Length(min=5)  
-        ]
-    )
-
-# Request Schema for Login
-class UserLoginSchema(Schema):
-    username = fields.Str(required=True)
-    email = fields.Str(required=True)
-    password = fields.Str(required=True)
+Swagger(app)
 
 from flask_login import UserMixin
 login_manager = LoginManager(app)
@@ -94,7 +49,7 @@ DB_CONFIG = {
     'host': '127.0.0.1',
     'user': 'root',
     'password': 'Kyaw550550#',
-    'database': 'plagiarism_checker'
+    'database': 'my_new_database'
 }
 
 RECORDS_PER_PAGE = 10
@@ -375,11 +330,179 @@ def dashboard():
                            similarity_distribution=json.dumps({}),
                            recent_comparisons=[])
 
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        email = request.form['email']
+        # Hash the password using bcrypt
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        connection = create_database_connection()
+        if connection:
+            try:
+                cursor = connection.cursor()
+                cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+                existing_user = cursor.fetchone()
+                if existing_user:
+                    flash('Username already exists','danger')
+                    return redirect(url_for('register'))
+                # Insert the new user into the database
+                cursor.execute("INSERT INTO users (username, email, password, is_admin) VALUES (%s, %s, %s, %s)",
+                               (username, email, hashed_password, False))
+                connection.commit()
+                flash('Account created successfully! You can now log in.', 'success')
+                return redirect(url_for('login'))
+
+            except Error as e:
+                print(f"Error during registration: {e}")
+                connection.rollback()
+                flash('Error during registration. Please try again.', 'danger')
+            finally:
+                if connection.is_connected():
+                    cursor.close()
+                    connection.close()
+
+    return render_template('register.html')
+
+
+@app.route('/api/register', methods=['POST'])
+@swag_from('static/docs/register.yml')
+def api_register():
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        email = data.get('email')
+
+        if not username or not password or not email:
+            return jsonify({"error": "Missing required fields"}), 400
+
+        # Hash the password using bcrypt
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        connection = create_database_connection()
+
+        if connection:
+            cursor = connection.cursor()
+            cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+            existing_user = cursor.fetchone()
+            if existing_user:
+                return jsonify({"error": "Username already exists"}), 409
+
+            # Insert the new user into the database
+            cursor.execute("INSERT INTO users (username, email, password, is_admin) VALUES (%s, %s, %s, %s)",
+                           (username, email, hashed_password, False))
+            connection.commit()
+
+            return jsonify({"message": "User registered successfully"}), 201
+
+    except Exception as e:
+        return jsonify({"error": "Error during registration"}), 500
+
+    finally:
+        if connection and connection.is_connected():
+            cursor.close()
+            connection.close()
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        connection = create_database_connection()
+        if connection:
+            try:
+                cursor = connection.cursor(dictionary=True)
+                cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+                user = cursor.fetchone()
+
+                if user and bcrypt.check_password_hash(user['password'], password):
+                    user_obj = User(id=user['id'], username=user['username'], password=user['password'], is_admin=user['is_admin'])
+                    login_user(user_obj)
+                    flash('Logged in successfully')
+                    if user['is_admin']:
+                        return redirect(url_for('admin_dashboard'))
+                    else:
+                        return redirect(url_for('index'))
+                else:
+                    flash('Invalid username or password')
+
+            except Error as e:
+                print(f"Error during login: {e}")
+
+            finally:
+                if connection.is_connected():
+                    cursor.close()
+                    connection.close()
+
+    return render_template('login.html')
+
+@app.route('/api/login', methods=['POST'])
+@swag_from('static/docs/login.yml')
+def api_login():
+    try:
+        # Parse JSON payload
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid input, JSON payload required"}), 400
+        
+        # Extract username and password
+        username = data.get('username')
+        password = data.get('password')
+
+        # Validate input
+        if not username or not password:
+            return jsonify({"error": "Username and password are required"}), 400
+
+        # Connect to the database
+        connection = create_database_connection()
+        if not connection:
+            return jsonify({"error": "Database connection failed"}), 500
+        
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
+
+        # Check if user exists and password is correct
+        if user and bcrypt.check_password_hash(user['password'], password):
+            # Construct user object for session handling
+            user_obj = User(id=user['id'], username=user['username'], password=user['password'], is_admin=user['is_admin'])
+            login_user(user_obj)
+            return jsonify({"message": "Logged in successfully"}), 200
+        else:
+            return jsonify({"error": "Invalid username or password"}), 401
+
+    except Exception as e:
+        # Log the error for debugging (use proper logging in production)
+        print(f"Error during API login: {e}")
+        return jsonify({"error": "An unexpected error occurred"}), 500
+
+    finally:
+        # Ensure the database connection is closed
+        if connection and connection.is_connected():
+            cursor.close()
+            connection.close()
+
+
 @app.route('/logout')
 def logout():
     logout_user()  
     flash('You have been logged out successfully.', 'success') 
     return redirect(url_for('dashboard'))
+
+@app.route('/api/logout', methods=['POST'])
+@swag_from('static/docs/logout.yml')  # Swagger YAML file for logout API
+def api_logout():
+    try:
+        # Log the user out
+        logout_user()
+        
+        # Return success message
+        return jsonify({"message": "You have been logged out successfully."}), 200
+
+    except Exception as e:
+        print(f"Error during logout: {e}")
+        return jsonify({"error": "Error during logout"}), 500
 
 @app.route('/', methods=['GET', 'POST'])
 @login_required
@@ -400,6 +523,68 @@ def index():
         return render_template('results.html', results=results, get_file_icon=get_file_icon)
     
     return render_template('index.html')
+
+@app.route('/api/check-plagiarism', methods=['POST'])
+@swag_from('static/docs/check.yml')
+def check_plagiarism():
+    try:
+        # Ensure the upload folder exists
+        ensure_upload_folder_exists()
+
+        # Check if 'files' is in the request
+        if 'files' not in request.files:
+            return jsonify({"error": "No files provided"}), 400
+
+        # Retrieve the files from the form data
+        files = request.files.getlist('files')
+        user_id = request.form.get('user_id')
+
+        # Validate user_id
+        if not user_id or not user_id.isdigit():
+            return jsonify({"error": "Invalid or missing user_id"}), 400
+
+        user_id = int(user_id)
+
+        # Ensure the temp_uploads folder exists
+        temp_upload_folder = 'temp_uploads'
+        if not os.path.exists(temp_upload_folder):
+            os.makedirs(temp_upload_folder)
+
+        # Save uploaded files temporarily
+        file_paths = []
+        for file in files:
+            if file.filename == '':
+                return jsonify({"error": "One or more files are missing a filename"}), 400
+
+            file_path = os.path.join(temp_upload_folder, file.filename)
+            file.save(file_path)
+            file_paths.append(file_path)
+
+        # Call the compare_files function
+        results = compare_files(file_paths, user_id)
+
+        # Format the response
+        response_data = []
+        for result in results:
+            file1, file2, similarity, highlighted_file1, highlighted_file2 = result
+            response_data.append({
+                "file1": file1,
+                "file2": file2,
+                "similarity": similarity,
+                "highlighted_file1": highlighted_file1,
+                "highlighted_file2": highlighted_file2
+            })
+
+        # Clean up temporary files
+        for path in file_paths:
+            if os.path.exists(path):
+                os.remove(path)
+
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        print(f"Error during file comparison: {e}")
+        return jsonify({"error": "An error occurred during file comparison"}), 500
 
 @app.route('/history')
 @login_required
@@ -650,315 +835,6 @@ def delete_comparison(comparison_id):
                 connection.close()
     return redirect(url_for('admin_dashboard'))
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    """
-    Register a new user
-    ---
-    tags:
-      - Authentication
-    parameters:
-      - in: body
-        name: body
-        required: true
-        schema:
-          type: object
-          properties:
-            username:
-              type: string
-              description: Username for the new user
-              minLength: 3
-              maxLength: 50
-            email:
-              type: string
-              format: email
-            password:
-              type: string
-              minLength: 5
-    responses:
-      200:
-        description: User registered successfully
-      400:
-        description: Registration error
-    """
-    if request.method == 'POST':
-        # Check if the request is in JSON format
-        if not request.is_json:
-            return jsonify({"error": "Request must be in JSON format"}), 400
-        
-        try:
-            # Get the JSON data from the request
-            data = request.get_json()
-
-            # Extract the username, email, and password from the request data
-            username = data.get('username')
-            password = data.get('password')
-            email = data.get('email')
-
-            # Validate the data
-            if not username or not password or not email:
-                return jsonify({"error": "Username, email, and password are required"}), 400
-
-            if len(username) < 3 or len(username) > 50:
-                return jsonify({"error": "Username must be between 3 and 50 characters"}), 400
-
-            if len(password) < 5:
-                return jsonify({"error": "Password must be at least 5 characters long"}), 400
-
-            # Connect to the database and check if the username already exists
-            connection = create_database_connection()
-            if connection:
-                try:
-                    cursor = connection.cursor(dictionary=True)
-
-                    # Check if the username already exists
-                    cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-                    existing_user = cursor.fetchone()
-
-                    if existing_user:
-                        return jsonify({"error": "Username already exists"}), 400
-
-                    # Hash the password before storing it
-                    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-
-                    # Insert the new user into the database
-                    cursor.execute("INSERT INTO users (username, email, password, is_admin) VALUES (%s, %s, %s, %s)", 
-                                   (username, email, hashed_password, False))
-                    connection.commit()
-
-                    return jsonify({"message": "Account created successfully"}), 201
-
-                except Error as e:
-                    print(f"Error during registration: {e}")
-                    connection.rollback()
-                    return jsonify({"error": "Error during registration"}), 500
-                finally:
-                    if connection.is_connected():
-                        cursor.close()
-                        connection.close()
-
-        except Exception as e:
-            return jsonify({"error": f"Error: {str(e)}"}), 400
-
-    # For GET request, return registration form
-    return render_template('register.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    """
-    User Login
-    ---
-    tags:
-      - Authentication
-    parameters:
-      - in: body
-        name: body
-        required: true
-        schema:
-          type: object
-          properties:
-            username:
-              type: string
-              description: Username of the user
-            password:
-              type: string
-              description: Password of the user
-    responses:
-      200:
-        description: User logged in successfully
-      401:
-        description: Invalid credentials
-    """
-    if request.method == 'POST':
-        # Check if the request is in JSON format
-        if not request.is_json:
-            return jsonify({"error": "Request must be in JSON format"}), 400
-
-        try:
-            data = request.get_json()
-            username = data['username']
-            password = data['password']
-        except KeyError:
-            return jsonify({"error": "Missing required fields: username or password"}), 400
-
-        # Validate if the fields are provided
-        if not username or not password:
-            return jsonify({"error": "Username and password are required"}), 400
-
-        # Connect to the database and authenticate the user
-        connection = create_database_connection()
-        if connection:
-            try:
-                cursor = connection.cursor(dictionary=True)
-                cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-                user = cursor.fetchone()
-
-                if user and bcrypt.check_password_hash(user['password'], password):
-                    user_obj = User(id=user['id'], username=user['username'], 
-                                    password=user['password'], is_admin=user['is_admin'])
-                    login_user(user_obj)
-                    return jsonify({
-                        "message": "Logged in successfully", 
-                        "is_admin": user['is_admin']
-                    }), 200
-                else:
-                    return jsonify({"error": "Invalid username or password"}), 401
-
-            except Error as e:
-                print(f"Error during login: {e}")
-                return jsonify({"error": "Server error during login"}), 500
-            finally:
-                if connection.is_connected():
-                    cursor.close()
-                    connection.close()
-
-    # For GET request, return the login form
-    return render_template('login.html')
-
-UPLOAD_FOLDER = r'C:\Users\kyawz\Desktop\plagarism_checker-1\uploads'
-
-@app.route('/compare-files', methods=['POST'])
-@login_required
-def compare_files_api():
-    """
-    Compare uploaded files for plagiarism
-    ---
-    tags:
-      - Plagiarism Checking
-    parameters:
-      - in: formData
-        name: files
-        required: true
-        type: array
-        items:
-          type: file
-        description: List of files to compare. At least two files are required for comparison.
-    requestBody:
-      required: true
-      content:
-        multipart/form-data:
-          schema:
-            type: object
-            properties:
-              files:
-                type: array
-                items:
-                  type: string
-                  format: binary
-                description: List of files to compare (at least 2 files required)
-                minItems: 2
-                maxItems: 10
-    responses:
-      200:
-        description: File comparison results
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                message:
-                  type: string
-                results:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      file1:
-                        type: string
-                        description: First file name
-                      file2:
-                        type: string
-                        description: Second file name
-                      similarity:
-                        type: number
-                        format: float
-      400:
-        description: Invalid input (e.g., fewer than 2 files)
-      500:
-        description: Internal server error
-    """
-    # Validate upload folder exists
-    ensure_upload_folder_exists()
-    
-    # Check if files are present in the request
-    if 'files' not in request.files:
-        return jsonify({"error": "No files uploaded"}), 400
-    
-    uploaded_files = request.files.getlist('files')
-    
-    # Validate number of files
-    if len(uploaded_files) < 2:
-        return jsonify({"error": "At least two files are required for comparison"}), 400
-    
-    # Validate maximum number of files
-    if len(uploaded_files) > 10:
-        return jsonify({"error": "Maximum of 10 files allowed for comparison"}), 400
-    
-    # Validate file types and sizes if needed
-    ALLOWED_EXTENSIONS = {'txt', 'pdf', 'docx', 'doc', 'rtf'}
-    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
-    
-    file_paths = []
-    try:
-        # Process and validate each uploaded file
-        for file in uploaded_files:
-            if not file or not file.filename:
-                continue
-            
-            # Check file extension
-            filename = secure_filename(file.filename)
-            file_ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-            if file_ext not in ALLOWED_EXTENSIONS:
-                return jsonify({
-                    "error": f"Invalid file type. Allowed types are: {', '.join(ALLOWED_EXTENSIONS)}"
-                }), 400
-            
-            # Check file size
-            file.seek(0, os.SEEK_END)
-            file_size = file.tell()
-            file.seek(0)
-            if file_size > MAX_FILE_SIZE:
-                return jsonify({
-                    "error": f"File {filename} exceeds maximum size of 10 MB"
-                }), 400
-            
-            # Save file
-            file_path = os.path.join(UPLOAD_FOLDER, f"{current_user.id}_{filename}")
-            file.save(file_path)
-            file_paths.append(file_path)
-        
-        # Perform file comparison
-        results = compare_files(file_paths, current_user.id)
-        
-        # Return results as JSON
-        return jsonify({
-            "message": "Files compared successfully",
-            "results": [
-                {
-                    "file1": os.path.basename(result[0]),
-                    "file2": os.path.basename(result[1]),
-                    "similarity": round(result[2], 2)
-                } for result in results
-            ]
-        }), 200
-    
-    except Exception as e:
-        # Log the error for server-side tracking
-        app.logger.error(f"File comparison error: {str(e)}")
-        return jsonify({
-            "error": "An error occurred during file comparison", 
-            "details": str(e)
-        }), 500
-    
-    finally:
-        # Clean up temporary files
-        for path in file_paths:
-            try:
-                if os.path.exists(path):
-                    os.remove(path)
-            except Exception as cleanup_error:
-                app.logger.warning(f"Error during file cleanup: {cleanup_error}")
-
 if __name__ == '__main__':
-    ensure_upload_folder_exists()
+    alter_comparisons_table()
     app.run(debug=True)

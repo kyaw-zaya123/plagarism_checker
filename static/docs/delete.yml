@@ -1,0 +1,57 @@
+tags:
+  - name: Delete record
+summary: Delete a comparison record
+description: Deletes a specific comparison record owned by the authenticated user
+parameters:
+  - name: id
+    in: path
+    required: true
+    type: integer
+    description: ID of the comparison record to delete
+responses:
+  200:
+    description: Record successfully deleted
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Record deleted successfully
+  404:
+    description: Record not found or unauthorized
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Record not found or unauthorized
+  405:
+    description: Method not allowed
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Method not allowed
+  500:
+    description: Server error
+    schema:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Error deleting record
+security:
+  - Bearer: []

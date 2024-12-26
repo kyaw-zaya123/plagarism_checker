@@ -1,0 +1,22 @@
+---
+tags:
+  - User Management
+summary: User logout
+description: This endpoint logs out the currently authenticated user.
+responses:
+  200:
+    description: Logout successful
+    schema:
+      type: object
+      properties:
+        message:
+          type: string
+          example: You have been logged out successfully.
+  500:
+    description: Logout failed
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Logout failed. Please try again.

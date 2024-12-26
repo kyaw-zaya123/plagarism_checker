@@ -1,4 +1,3 @@
-#main.py
 import os
 import docx
 import pdfplumber
@@ -365,7 +364,6 @@ def register():
 
     return render_template('register.html')
 
-
 @app.route('/api/register', methods=['POST'])
 @swag_from('static/docs/register.yml')
 def api_register():
@@ -524,6 +522,8 @@ def index():
     
     return render_template('index.html')
 
+import html
+
 @app.route('/api/check-plagiarism', methods=['POST'])
 @swag_from('static/docs/check.yml')
 def check_plagiarism():
@@ -556,23 +556,31 @@ def check_plagiarism():
             if file.filename == '':
                 return jsonify({"error": "One or more files are missing a filename"}), 400
 
+            # Create the file path
             file_path = os.path.join(temp_upload_folder, file.filename)
+            # Save the file
             file.save(file_path)
+            # Add the path to the list
             file_paths.append(file_path)
 
         # Call the compare_files function
         results = compare_files(file_paths, user_id)
 
-        # Format the response
+        # Format the response data
         response_data = []
         for result in results:
             file1, file2, similarity, highlighted_file1, highlighted_file2 = result
+            
+            # Escape HTML tags in the highlighted content
+            escaped_highlighted_file1 = html.escape(highlighted_file1)
+            escaped_highlighted_file2 = html.escape(highlighted_file2)
+            
             response_data.append({
                 "file1": file1,
                 "file2": file2,
                 "similarity": similarity,
-                "highlighted_file1": highlighted_file1,
-                "highlighted_file2": highlighted_file2
+                "highlighted_file1": escaped_highlighted_file1,
+                "highlighted_file2": escaped_highlighted_file2
             })
 
         # Clean up temporary files
@@ -580,11 +588,13 @@ def check_plagiarism():
             if os.path.exists(path):
                 os.remove(path)
 
+        # Return the response
         return jsonify(response_data), 200
 
     except Exception as e:
         print(f"Error during file comparison: {e}")
         return jsonify({"error": "An error occurred during file comparison"}), 500
+
 
 @app.route('/history')
 @login_required
@@ -669,6 +679,34 @@ def delete(id):
                 cursor.close()
                 connection.close()
     return redirect(url_for('history'))
+
+@app.route('/api/delete/<int:id>', methods=['DELETE'])
+@swag_from('static/docs/delete.yml')
+def api_delete(id):
+    try:
+        connection = create_database_connection()
+        
+        if connection:
+            cursor = connection.cursor()
+            query = "DELETE FROM comparisons WHERE id = %s AND user_id = %s"
+            cursor.execute(query, (id, 1))  # For testing, using user_id=1 or hardcoded value
+            connection.commit()
+
+            if cursor.rowcount > 0:
+                return jsonify({'message': 'Record deleted successfully'}), 200
+            else:
+                return jsonify({'error': 'No record found or insufficient permissions'}), 404
+        else:
+            return jsonify({'error': 'Database connection failed'}), 500
+            
+    except Error as e:
+        print(f"Error deleting history entry: {e}")
+        return jsonify({'error': 'An error occurred while deleting the record'}), 500
+    
+    finally:
+        if connection and connection.is_connected():
+            cursor.close()
+            connection.close()
 
 @app.route('/help')
 def help_page():

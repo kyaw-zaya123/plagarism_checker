@@ -1,0 +1,18 @@
+{% extends 'filecompare/base.html' %}
+
+{% block content %}
+<div class="max-w-md mx-auto text-center">
+    <div class="bg-white p-8 rounded-lg shadow-md">
+        <h2 class="text-2xl font-bold mb-4">Logged Out Successfully</h2>
+        <p class="mb-6">You have been logged out of the File Comparison App.</p>
+        <a href="{% url 'login' %}" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition">
+            Log In Again
+        </a>
+        <div class="mt-4">
+            <a href="{% url 'home' %}" class="text-blue-500 hover:underline">
+                Return to Home
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

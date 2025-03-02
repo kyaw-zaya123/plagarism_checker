@@ -1,0 +1,13 @@
+{% extends 'filecompare/base.html' %}
+
+{% block content %}
+<div class="text-center">
+    <h1 class="text-4xl font-bold mb-4">Welcome to File Comparison App</h1>
+    <p class="mb-8">Compare your files and see their similarity percentage</p>
+    {% if user.is_authenticated %}
+        <a href="{% url 'upload_files' %}" class="bg-blue-600 text-black px-6 py-3 rounded">Start Comparing Files</a>
+    {% else %}
+        <a href="{% url 'login' %}" class="bg-blue-600 text-white px-6 py-3 rounded">Login to Start</a>
+    {% endif %}
+</div>
+{% endblock %}

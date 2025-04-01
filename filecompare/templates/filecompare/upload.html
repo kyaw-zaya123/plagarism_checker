@@ -1,0 +1,124 @@
+{% extends 'filecompare/base.html' %}
+{% load static %}
+<link rel="stylesheet" href="{% static 'css/styles.css' %}">
+{% block content %}
+<main class="container py-1">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-primary text-white text-center p-3">
+                    <h1 class="h3 fw-bold">
+                        <span class="fas fa-file-upload me-2"></span>
+                        Инструмент сравнения файлов
+                    </h1>
+                </div>
+                
+                <div class="card-body p-3">
+                    <!-- Upload Progress Bar -->
+                    <div id="upload-progress-container" class="mb-4 d-none">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-cloud-upload-alt me-2"></i> Прогресс загрузки
+                        </label>
+                        <div class="progress" style="height: 25px;">
+                            <div id="upload-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" 
+                                 style="width: 0%">0%</div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-1">
+                            <small id="upload-time-elapsed">Прошло: 0 сек</small>
+                            <small id="upload-time-remaining">Осталось: расчет...</small>
+                        </div>
+                    </div>
+
+                    <form method="post" enctype="multipart/form-data" id="file-comparison-form" 
+                          class="needs-validation" novalidate>
+                        {% csrf_token %}
+                        
+                        {# Контейнер загрузки файлов #}
+                        <div id="file-upload-container">
+                            <div class="mb-4 file-upload">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label for="file-upload-1" class="form-label h5 mb-0">
+                                        <span class="fas fa-file-alt me-2" aria-hidden="true"></span>
+                                        Файл 1
+                                    </label>
+                                    <span class="badge bg-secondary" id="file-size-1"></span>
+                                </div>
+                                <input type="file" 
+                                       id="file-upload-1" 
+                                       name="files" 
+                                       class="form-control form-control-lg"
+                                       accept=".pdf,.docx,.txt"
+                                       aria-describedby="file-help-1"
+                                       required>
+                                <div class="invalid-feedback">Пожалуйста, выберите допустимый файл.</div>
+                            </div>
+                        </div>
+
+
+                        {# Кнопки управления файлами #}
+                        <div class="d-flex gap-3 mb-4">
+                            <button type="button" 
+                                    id="add-file" 
+                                    class="btn btn-outline-success"
+                                    aria-label="Добавить еще файл">
+                                <span class="fas fa-plus-circle me-2" aria-hidden="true"></span>
+                                Добавить файл
+                            </button>
+                            <button type="button" 
+                                    id="remove-file" 
+                                    class="btn btn-outline-danger"
+                                    aria-label="Удалить последний файл"
+                                    disabled>
+                                <span class="fas fa-minus-circle me-2" aria-hidden="true"></span>
+                                Удалить файл
+                            </button>
+                        </div>
+
+                        {# Сообщения об ошибках #}
+                        {% if form.files.errors %}
+                            <div class="alert alert-danger" role="alert">
+                                {% for error in form.files.errors %}
+                                    <div class="d-flex align-items-center">
+                                        <span class="fas fa-exclamation-triangle me-2" aria-hidden="true"></span>
+                                        <span>{{ error }}</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        
+                        {# Название сравнения #}
+                        <div class="mb-4">
+                            <label for="comparison_name" class="form-label fw-semibold">
+                                <i class="fas fa-file-signature me-2"></i> Название сравнения
+                            </label>
+                            <input type="text" 
+                                   name="comparison_name" 
+                                   id="comparison_name" 
+                                   class="form-control form-control-lg shadow-sm rounded-3" 
+                                   placeholder="Введите уникальное название для этого сравнения..." 
+                                   required>
+                        </div>
+                        
+                        {# Кнопка отправки #}
+                        <div class="d-grid">
+                            <button type="submit" 
+                                    class="btn btn-primary btn-lg"
+                                    id="compare-button">
+                                <span class="fas fa-upload me-2" aria-hidden="true"></span>
+                                Сравнить файлы
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+
+{# Подключение script.js перед закрытием тега body #}
+<script src="{% static 'js/script.js' %}"></script>
+
+{% endblock %}

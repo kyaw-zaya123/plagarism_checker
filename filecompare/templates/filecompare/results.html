@@ -1,0 +1,90 @@
+{% extends 'filecompare/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4 text-center">📊 Результаты сравнения</h2>
+
+    {% if results %}
+        <div class="table-responsive">
+            <table class="table table-hover table-bordered align-middle shadow-sm">
+                <thead class="table-primary">
+                    <tr class="text-center">
+                        <th>📄 Файл 1</th>
+                        <th>📄 Файл 2</th>
+                        <th>📊 Сходство (%)</th>
+                        <th>🖍 Выделенный файл 1</th>
+                        <th>🖍 Выделенный файл 2</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for result in results %}
+                        <tr class="text-center">
+                            <td><strong>{{ result.file1 }}</strong></td>
+                            <td><strong>{{ result.file2 }}</strong></td>
+                            <td>
+                                <span class="badge 
+                                    {% if result.similarity >= 80 %} bg-danger 
+                                    {% elif result.similarity >= 50 %} bg-warning 
+                                    {% else %} bg-success 
+                                    {% endif %}">
+                                    {{ result.similarity|floatformat:2 }}%
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#highlightModal1{{ forloop.counter }}">
+                                    Посмотреть основные моменты
+                                </button>
+                            </td>
+                            <td>
+                                <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#highlightModal2{{ forloop.counter }}">
+                                    Посмотреть основные моменты
+                                </button>
+                            </td>
+                        </tr>
+
+                        <!-- Modal for Highlighted File 1 -->
+                        <div class="modal fade" id="highlightModal1{{ forloop.counter }}" tabindex="-1" aria-labelledby="highlightModal1Label{{ forloop.counter }}" aria-hidden="true">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-info text-white">
+                                        <h5 class="modal-title" id="highlightModal1Label{{ forloop.counter }}">Выделенный файл 1</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="p-3 border rounded bg-light">
+                                            {{ result.highlighted_file1|safe }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal for Highlighted File 2 -->
+                        <div class="modal fade" id="highlightModal2{{ forloop.counter }}" tabindex="-1" aria-labelledby="highlightModal2Label{{ forloop.counter }}" aria-hidden="true">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-info text-white">
+                                        <h5 class="modal-title" id="highlightModal2Label{{ forloop.counter }}">Выделенный файл 2</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="p-3 border rounded bg-light">
+                                            {{ result.highlighted_file2|safe }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="alert alert-warning text-center">⚠️ Результаты сравнения не найдены.</p>
+    {% endif %}
+</div>
+
+<!-- Bootstrap JS (if not already included in base.html) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+{% endblock %}

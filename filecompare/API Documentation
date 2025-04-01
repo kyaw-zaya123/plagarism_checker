@@ -1,0 +1,243 @@
+# File Comparison System API Documentation
+
+This document provides details about the API endpoints available in the File Comparison System.
+
+## Authentication
+
+All API endpoints require authentication using token authentication.
+
+### Obtaining a Token
+
+```
+POST /api/token/
+```
+
+**Request Body:**
+
+```json
+{
+  "username": "your_username",
+  "password": "your_password"
+}
+```
+
+**Response:**
+
+```json
+{
+  "token": "your_authentication_token"
+}
+```
+
+**Usage:**
+Include the token in the Authorization header of all subsequent requests:
+
+```
+Authorization: Token your_authentication_token
+```
+
+## File Endpoints
+
+### List Files
+
+Returns all files uploaded by the authenticated user.
+
+```
+GET /api/files/
+```
+
+**Response:**
+
+```json
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "filename": "document1.txt",
+      "content": "File content...",
+      "file_path": "/path/to/file",
+      "created_at": "2025-03-18T10:00:00Z",
+      "user_id": 1
+    },
+    {
+      "id": 2,
+      "filename": "document2.txt",
+      "content": "File content...",
+      "file_path": "/path/to/file",
+      "created_at": "2025-03-18T11:00:00Z",
+      "user_id": 1
+    }
+  ]
+}
+```
+
+### Get File Detail
+
+Returns details of a specific file.
+
+```
+GET /api/files/{id}/
+```
+
+**Response:**
+
+```json
+{
+  "id": 1,
+  "filename": "document1.txt",
+  "content": "File content...",
+  "file_path": "/path/to/file",
+  "created_at": "2025-03-18T10:00:00Z",
+  "user_id": 1
+}
+```
+
+### Upload File
+
+Upload a new file to the system.
+
+```
+POST /api/files/upload/
+```
+
+**Request:**
+Form data with a `file` field containing the file to upload.
+
+**Response:**
+
+```json
+{
+  "id": 3,
+  "filename": "document3.txt",
+  "content": "File content...",
+  "file_path": "/path/to/file",
+  "created_at": "2025-03-18T12:00:00Z",
+  "user_id": 1
+}
+```
+
+### Delete File
+
+Delete a specific file.
+
+```
+DELETE /api/files/{id}/
+```
+
+**Response:**
+HTTP 204 No Content
+
+## Comparison Endpoints
+
+### List Comparisons
+
+Returns all comparisons performed by the authenticated user.
+
+```
+GET /api/comparisons/
+```
+
+**Response:**
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "comparison_name": "Comparison 1",
+      "file1": 1,
+      "file2": 2,
+      "file1_name": "document1.txt",
+      "file2_name": "document2.txt",
+      "similarity": 75.5,
+      "user": 1,
+      "compared_at": "2025-03-18T12:30:00Z",
+      "highlighted_content1": "<span class='highlight'>Highlighted content...</span>",
+      "highlighted_content2": "<span class='highlight'>Highlighted content...</span>"
+    }
+  ]
+}
+```
+
+### Get Comparison Detail
+
+Returns details of a specific comparison.
+
+```
+GET /api/comparisons/{id}/
+```
+
+**Response:**
+
+```json
+{
+  "id": 1,
+  "comparison_name": "Comparison 1",
+  "file1": 1,
+  "file2": 2,
+  "file1_name": "document1.txt",
+  "file2_name": "document2.txt",
+  "similarity": 75.5,
+  "user": 1,
+  "compared_at": "2025-03-18T12:30:00Z",
+  "highlighted_content1": "<span class='highlight'>Highlighted content...</span>",
+  "highlighted_content2": "<span class='highlight'>Highlighted content...</span>"
+}
+```
+
+### Compare Files
+
+Compare two or more files.
+
+```
+POST /api/comparisons/compare_files/
+```
+
+**Request Body:**
+
+```json
+{
+  "file_ids": [1, 2],
+  "comparison_name": "Comparison 1",
+  "semantic_threshold": 0.9,
+  "tfidf_threshold": 0.8
+}
+```
+
+**Response:**
+
+```json
+[
+  {
+    "comparison_id": 1,
+    "file1": {
+      "id": 1,
+      "filename": "document1.txt"
+    },
+    "file2": {
+      "id": 2,
+      "filename": "document2.txt"
+    },
+    "similarity": 75.5,
+    "semantic_similarity": 80.2,
+    "tfidf_similarity": 70.8
+  }
+]
+```
+
+### Download PDF Report
+
+Generate and download a PDF report for a comparison.
+
+```
+GET /api/comparisons/{id}/download_pdf/
+```
+
+**Response:**
+PDF file as a download

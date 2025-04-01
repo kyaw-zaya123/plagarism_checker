@@ -1,0 +1,188 @@
+{% extends 'filecompare/base.html' %}
+
+{% block content %}
+<div class="container mt-1">
+    <h2 class="text-center text-white fw-bold">📊 Обзор Дашборда</h2>
+
+    <!-- Search Form with Clear Button -->
+    <form method="GET" action="" class="mb-4">
+        <div class="input-group">
+            <input type="text" id="searchInput" name="q" class="form-control" placeholder="Поиск по названию сравнения" value="{{ request.GET.q }}">
+            <button class="btn btn-primary" type="submit">🔍 Поиск</button>
+            {% if request.GET.q %}
+                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">✖ Очистить</a>
+            {% else %}
+                <button type="button" id="clearSearch" class="btn btn-outline-secondary" style="display: none;">✖</button>
+            {% endif %}
+        </div>
+    </form>
+
+    <!-- Statistics Overview -->
+    <div class="row text-center mb-3">
+        <div class="col-md-3">
+            <div class="card shadow-lg p-4 border-0 rounded-4 text-white bg-gradient-primary mb-4 hover-shadow">
+                <h5 class="fs-4">Всего сравнений</h5>
+                <p class="display-4 fw-bold">{{ total_comparisons }}</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-lg p-4 border-0 rounded-4 text-white bg-gradient-success mb-4 hover-shadow">
+                <h5 class="fs-4">Низкое сходство</h5>
+                <p class="display-4 fw-bold">{{ similarity_distribution.Low }}</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-lg p-4 border-0 rounded-4 text-white bg-gradient-warning mb-4 hover-shadow">
+                <h5 class="fs-4">Среднее сходство</h5>
+                <p class="display-4 fw-bold">{{ similarity_distribution.Medium }}</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-lg p-4 border-0 rounded-4 text-white bg-gradient-danger mb-4 hover-shadow">
+                <h5 class="fs-4">Высокое сходство</h5>
+                <p class="display-4 fw-bold">{{ similarity_distribution.High }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Doughnut Chart -->
+    <div class="d-flex justify-content-center">
+        <div class="col-md-4">
+            <canvas id="similarityDoughnutChart" class="p-3 bg-white shadow-lg rounded-3"></canvas>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    <nav>
+        <ul class="pagination justify-content-center">
+            {% if comparisons.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page=1">Первый</a></li>
+                <li class="page-item"><a class="page-link" href="?page={{ comparisons.previous_page_number }}">Предыдущий</a></li>
+            {% endif %}
+            <li class="page-item active"><span class="page-link">Page {{ comparisons.number }} of {{ comparisons.paginator.num_pages }}</span></li>
+            {% if comparisons.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ comparisons.next_page_number }}">Следующий</a></li>
+                <li class="page-item"><a class="page-link" href="?page={{ comparisons.paginator.num_pages }}">Последний</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+</div>
+
+<!-- JavaScript for Search Clear Button -->
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const searchInput = document.getElementById("searchInput");
+        const clearSearch = document.getElementById("clearSearch");
+        
+        // Only set up event handlers if the clear button exists
+        // (it will only exist when there's no query parameter)
+        if (clearSearch) {
+            function toggleClearButton() {
+                clearSearch.style.display = searchInput.value ? "block" : "none";
+            }
+
+            searchInput.addEventListener("input", toggleClearButton);
+            
+            clearSearch.addEventListener("click", function () {
+                // If there's a value and the user clears it, redirect to dashboard
+                if (searchInput.value) {
+                    window.location.href = "{% url 'dashboard' %}";
+                } else {
+                    // Otherwise just clear the input (though it should already be empty)
+                    searchInput.value = "";
+                    toggleClearButton();
+                }
+            });
+
+            // Initialize button visibility
+            toggleClearButton();
+        }
+    });
+</script>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const similarityData = JSON.parse('{{ similarity_distribution_json|escapejs }}');
+        const ctxDoughnut = document.getElementById('similarityDoughnutChart').getContext('2d');
+
+        // Doughnut Chart with Gradient and Animation
+        const gradientLow = ctxDoughnut.createLinearGradient(0, 0, 0, 400);
+        gradientLow.addColorStop(0, '#66bb6a');
+        gradientLow.addColorStop(1, '#4caf50');
+
+        const gradientMedium = ctxDoughnut.createLinearGradient(0, 0, 0, 400);
+        gradientMedium.addColorStop(0, '#ffeb3b');
+        gradientMedium.addColorStop(1, '#ffcc00');
+
+        const gradientHigh = ctxDoughnut.createLinearGradient(0, 0, 0, 400);
+        gradientHigh.addColorStop(0, '#f44336');
+        gradientHigh.addColorStop(1, '#d32f2f');
+
+        new Chart(ctxDoughnut, {
+            type: 'doughnut',
+            data: {
+                labels: ['Низкий', 'Средний', 'Высокий'],
+                datasets: [{
+                    data: [similarityData.Low, similarityData.Medium, similarityData.High],
+                    backgroundColor: [gradientLow, gradientMedium, gradientHigh],
+                    borderWidth: 1,
+                    hoverOffset: 12,
+                    hoverBorderWidth: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(tooltipItem) {
+                                let total = similarityData.Low + similarityData.Medium + similarityData.High;
+                                let percentage = ((tooltipItem.raw / total) * 100).toFixed(2);
+                                return `${tooltipItem.label}: ${tooltipItem.raw} (${percentage}%)`;
+                            }
+                        }
+                    },
+                    datalabels: {
+                        formatter: (value, ctx) => {
+                            let total = similarityData.Low + similarityData.Medium + similarityData.High;
+                            let percentage = ((value / total) * 100).toFixed(2);
+                            return `${percentage}%`;
+                        },
+                        color: 'white',
+                        font: {
+                            weight: 'bold',
+                            size: 18
+                        }
+                    },
+                    tooltip: {
+                        enabled: true,
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                        titleFont: {
+                            size: 16
+                        },
+                        bodyFont: {
+                            size: 14
+                        }
+                    }
+                },
+                animation: {
+                    animateScale: true,
+                    animateRotate: true
+                }
+            }
+        });
+    });
+</script>
+
+{% endblock %}

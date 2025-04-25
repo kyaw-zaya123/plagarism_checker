@@ -20,7 +20,7 @@ import warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
-from sentence_transformers import SentenceTransformer
+
 from nltk.tokenize import word_tokenize, sent_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -32,6 +32,7 @@ nltk.download('wordnet', quiet=True)
 
 lemmatizer = WordNetLemmatizer()
 
+from sentence_transformers import SentenceTransformer
 model = SentenceTransformer('all-MiniLM-L12-v2')
 
 from langdetect import detect
@@ -173,10 +174,14 @@ def compute_tfidf_sentence_similarity(sentences1, sentences2, threshold=0.5):
         return [], 0.0
 
     vectorizer = TfidfVectorizer(
-        min_df=1, 
-        max_df=0.9,
-        ngram_range=(1, 3),
-        sublinear_tf=True 
+        min_df=2,               
+        max_df=0.85,            
+        ngram_range=(1, 3),     
+        sublinear_tf=True,      
+        use_idf=True,           
+        smooth_idf=True,        
+        analyzer='word',        
+        token_pattern=r'\w+',   
     )
     
     all_sentences = sentences1 + sentences2
@@ -231,7 +236,7 @@ def compute_tfidf_sentence_similarity(sentences1, sentences2, threshold=0.5):
     overall_similarity = (0.45 * coverage1 + 0.45 * coverage2 + 0.1 * avg_similarity) * 100
     return matches, overall_similarity
 
-def find_semantic_matches(sentences1, sentences2, threshold=0.9):
+def find_semantic_matches(sentences1, sentences2, threshold=0.85):
     """Find semantically similar sentences between two documents."""
     embeddings1 = model.encode(sentences1)
     embeddings2 = model.encode(sentences2)
@@ -267,7 +272,7 @@ def highlight_similar_parts(text, matches, is_text1=True):
         if sentence in replaced_sentences:
             continue
         
-        opacity = min(1, max(0.2, (similarity - 0.9) * 2))
+        opacity = min(1, max(0.2, (similarity - 0.85) * 2))
         
         if method == 'semantic':
             color = f"rgba(255, 165, 0, {opacity:.2f})"  # Orange for semantic
@@ -356,8 +361,7 @@ def calculate_document_similarity(semantic_matches, tfidf_matches, sentences1, s
     return final_similarity
 
 
-def compare_files(file_paths, user_id, comparison_name, semantic_threshold=0.9, tfidf_threshold=0.5):
-    """Perform combined semantic and TF-IDF comparison."""
+def compare_files(file_paths, user_id, comparison_name, semantic_threshold=0.85, tfidf_threshold=0.5):
     raw_contents, preprocessed_contents = zip(*[read_file(fp) for fp in file_paths])
     
     file_instances = [
@@ -372,17 +376,61 @@ def compare_files(file_paths, user_id, comparison_name, semantic_threshold=0.9, 
             sentences2 = split_into_sentences(raw_contents[j])
             
             semantic_matches = find_semantic_matches(sentences1, sentences2, threshold=semantic_threshold)
-            
             tfidf_matches, tfidf_similarity = compute_tfidf_sentence_similarity(sentences1, sentences2, threshold=tfidf_threshold)
             
+            # Подсчет строк по категориям
+            no_match_lines = 0
+            partial_match_lines = 0
+            full_match_lines = 0
+            
+            # Получаем все совпадения
+            all_matches = semantic_matches + tfidf_matches
+            
+            # Создаем множества строк, которые уже обработаны
+            processed_sent1 = set()
+            processed_sent2 = set()
+            
+            # Классифицируем каждую пару совпадений
+            for match in all_matches:
+                sent1 = match['sentence1']
+                sent2 = match['sentence2']
+                similarity = match['similarity']
+                
+                # Пропускаем уже обработанные строки
+                if sent1 in processed_sent1 or sent2 in processed_sent2:
+                    continue
+                
+                processed_sent1.add(sent1)
+                processed_sent2.add(sent2)
+                
+                # Классификация по уровню сходства
+                if similarity >= 0.85:
+                    full_match_lines += 1
+                elif similarity >= 0.10:
+                    partial_match_lines += 1
+                else:
+                    no_match_lines += 1
+            
+            # Подсчитываем строки без совпадений
+            for sent in sentences1:
+                if sent not in processed_sent1:
+                    no_match_lines += 1
+            
+            for sent in sentences2:
+                if sent not in processed_sent2:
+                    no_match_lines += 1
+            
+            total_lines = len(sentences1) + len(sentences2)
+            
+            # Рассчитываем общее сходство
             combined_similarity = calculate_document_similarity(
                 semantic_matches, tfidf_matches, sentences1, sentences2
             )
             
-            all_matches = semantic_matches + tfidf_matches
             highlighted_file1 = highlight_similar_parts(raw_contents[i], all_matches, is_text1=True)
             highlighted_file2 = highlight_similar_parts(raw_contents[j], all_matches, is_text1=False)
             
+            # Создаем запись сравнения с новыми полями
             comparison = Comparison.objects.create(
                 file1=file_instances[i],
                 file2=file_instances[j],
@@ -390,9 +438,14 @@ def compare_files(file_paths, user_id, comparison_name, semantic_threshold=0.9, 
                 user_id=user_id,
                 highlighted_content1=highlighted_file1,
                 highlighted_content2=highlighted_file2,
-                comparison_name=comparison_name
+                comparison_name=comparison_name,
+                no_match_lines_count=no_match_lines,
+                partial_match_lines_count=partial_match_lines,
+                full_match_lines_count=full_match_lines,
+                total_lines_count=total_lines
             )
             
+            # Обновляем results
             results.append({
                 'file1': file_instances[i].filename,
                 'file2': file_instances[j].filename,
@@ -403,6 +456,10 @@ def compare_files(file_paths, user_id, comparison_name, semantic_threshold=0.9, 
                 'tfidf_matches': len(tfidf_matches),
                 'highlighted_file1': highlighted_file1,
                 'highlighted_file2': highlighted_file2,
+                'no_match_lines': no_match_lines,
+                'partial_match_lines': partial_match_lines,
+                'full_match_lines': full_match_lines,
+                'total_lines': total_lines,
                 'comparison': comparison
             })
     

@@ -1,0 +1,197 @@
+{% extends 'filecompare/base.html' %}
+
+{% block content %}
+<div class="container mt-1">
+    <h2 class="mb-3 text-center">📜 История сравнения</h2>
+
+    <!-- Mobile-Friendly Search Form -->
+    <form method="get" action="{% url 'search_comparisons' %}" class="mb-3">
+        <div class="input-group">
+            <input type="text" name="query" class="form-control" placeholder="🔍 Поиск по имени файла..." value="{{ query }}">
+            <button type="submit" class="btn btn-primary d-none d-md-block"><i class="fas fa-search"></i> Поиск</button>
+            <button type="submit" class="btn btn-primary d-md-none"><i class="fas fa-search"></i></button>
+            {% if query %}
+                <a href="{% url 'comparison_history' %}" class="btn btn-outline-secondary d-none d-md-block">✖ Очистить</a>
+                <a href="{% url 'comparison_history' %}" class="btn btn-outline-secondary d-md-none">✖</a>
+            {% endif %}
+        </div>
+    </form>
+
+    {% if comparisons %}
+        <!-- Standard Table for Desktop -->
+        <div class="table-responsive d-none d-lg-block">
+            <table class="table table-hover table-bordered align-middle shadow-sm">
+                <thead class="table-primary">
+                    <tr class="text-center">
+                        <th>📄 Файл 1</th>
+                        <th>📄 Файл 2</th>
+                        <th>📊 Сходство (%)</th>
+                        <th>📅 Дата</th>
+                        <th>⚙️ Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for comparison in comparisons %}
+                        <tr class="text-center">
+                            <td>{{ comparison.file1.filename }}</td>
+                            <td>{{ comparison.file2.filename }}</td>
+                            <td><span class="badge bg-info text-dark">{{ comparison.similarity|floatformat:2 }}%</span></td>
+                            <td>{{ comparison.compared_at|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                <a href="{% url 'view_comparison' comparison.id %}" class="btn btn-outline-info btn-sm">
+                                    <i class="fas fa-eye"></i> Вид
+                                </a>
+                                <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteModal{{ comparison.id }}">
+                                    <i class="fas fa-trash"></i> Удалить
+                                </button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Card View for Mobile -->
+        <div class="d-lg-none">
+            {% for comparison in comparisons %}
+                <div class="card mb-3 shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="badge bg-info text-dark">{{ comparison.similarity|floatformat:2 }}%</span>
+                        <small class="text-muted">{{ comparison.compared_at|date:"Y-m-d H:i" }}</small>
+                    </div>
+                    <div class="card-body p-3">
+                        <div class="mb-2">
+                            <small class="text-muted">Файл 1:</small>
+                            <p class="mb-1 text-truncate">{{ comparison.file1.filename }}</p>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">Файл 2:</small>
+                            <p class="mb-0 text-truncate">{{ comparison.file2.filename }}</p>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'view_comparison' comparison.id %}" class="btn btn-outline-info btn-sm">
+                                <i class="fas fa-eye"></i> Просмотр
+                            </a>
+                            <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteModal{{ comparison.id }}">
+                                <i class="fas fa-trash"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Delete Confirmation Modals -->
+        {% for comparison in comparisons %}
+            <div class="modal fade" id="deleteModal{{ comparison.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ comparison.id }}" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                            <h5 class="modal-title" id="deleteModalLabel{{ comparison.id }}">Подтвердить удаление</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Вы уверены, что хотите удалить это сравнение?</p>
+                            <div class="small text-muted mb-1">Файл 1: {{ comparison.file1.filename }}</div>
+                            <div class="small text-muted">Файл 2: {{ comparison.file2.filename }}</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <form method="post" action="{% url 'delete_comparison' comparison.id %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger">Удалить</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+
+        <!-- Mobile-Friendly Pagination -->
+        <nav aria-label="Pagination">
+            <ul class="pagination pagination-sm flex-wrap justify-content-center">
+                {% if comparisons.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1" aria-label="First">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ comparisons.previous_page_number }}" aria-label="Previous">
+                            <span aria-hidden="true">&lsaquo;</span>
+                        </a>
+                    </li>
+                {% endif %}
+
+                <li class="page-item disabled">
+                    <span class="page-link">{{ comparisons.number }} / {{ comparisons.paginator.num_pages }}</span>
+                </li>
+
+                {% if comparisons.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ comparisons.next_page_number }}" aria-label="Next">
+                            <span aria-hidden="true">&rsaquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ comparisons.paginator.num_pages }}" aria-label="Last">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+
+    {% else %}
+        <div class="alert alert-warning text-center">
+            <i class="fas fa-info-circle me-2"></i>История сравнения не найдена.
+        </div>
+    {% endif %}
+</div>
+
+{% block extra_css %}
+<style>
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+        .card-header {
+            padding: 0.5rem 0.75rem;
+        }
+        
+        .text-truncate {
+            max-width: 250px;
+        }
+        
+        .pagination .page-link {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+    }
+    
+    /* File name text wrapping for very long names */
+    .text-truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    /* Improve card hover experience */
+    .card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    }
+</style>
+{% endblock %}
+
+<!-- Bootstrap JS (if not already included in base.html) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+{% endblock %}

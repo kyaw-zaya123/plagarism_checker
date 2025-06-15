@@ -99,7 +99,8 @@ def extract_text_from_docx(file_path):
     doc = Document(file_path)
     text_parts = []
     start_extracting = False
-
+    
+    # Извлечение текста из параграфов
     for para in doc.paragraphs:
         para_text = para.text.strip()
 
@@ -114,6 +115,17 @@ def extract_text_from_docx(file_path):
 
         if start_extracting:
             text_parts.append(para_text)
+    
+    # Извлечение текста из таблиц, если мы начали извлечение
+    if start_extracting:
+        for table in doc.tables:
+            for row in table.rows:
+                row_text = []
+                for cell in row.cells:
+                    if cell.text.strip():
+                        row_text.append(cell.text.strip())
+                if row_text:
+                    text_parts.append(" | ".join(row_text))
 
     return '\n'.join(text_parts)
 
@@ -125,12 +137,39 @@ def extract_text_from_pdf(file_path):
         text = '\n'.join(page.extract_text() for page in pages if page.extract_text())
     return re.split(r'СПИСОК ИСПОЛЬЗОВАННЫХ ИСТОЧНИКОВ', text, flags=re.IGNORECASE)[0]
 
+
 def extract_text_from_txt(file_path):
-    """Extract text from TXT, skipping first two lines if applicable."""
+    """
+    Extract text from TXT file, starting from 'ВВЕДЕНИЕ' heading and
+    stopping at 'СПИСОК ИСПОЛЬЗОВАННЫХ ИСТОЧНИКОВ' heading.
+    In TXT files, headings are detected by checking if they're in all caps and on their own line.
+    """
     with open(file_path, 'r', encoding='utf-8') as text_file:
         lines = text_file.readlines()
-    text = ''.join(lines[2:] if len(lines) > 2 else lines)
-    return re.split(r'СПИСОК ИСПОЛЬЗОВАННЫХ ИСТОЧНИКОВ', text, flags=re.IGNORECASE)[0]
+    
+    text_parts = []
+    start_extracting = False
+    
+    for line in lines:
+        line_stripped = line.strip()
+        
+        # Check if this line is the introduction heading
+        if (not start_extracting and 
+            line_stripped.upper() == "ВВЕДЕНИЕ" and 
+            line_stripped.isupper()):
+            start_extracting = True
+            continue  # Skip the heading itself
+        
+        # Check if this line is the references heading
+        if (line_stripped.upper() == "СПИСОК ИСПОЛЬЗОВАННЫХ ИСТОЧНИКОВ" and 
+            line_stripped.isupper()):
+            break  # Stop processing at references section
+        
+        # Add the line if we've found the introduction
+        if start_extracting:
+            text_parts.append(line)
+    
+    return ''.join(text_parts)
 
 def read_file(file_path):
     """Extract text from supported file types."""
@@ -246,6 +285,7 @@ def find_semantic_matches(sentences1, sentences2, threshold=0.85):
     matches = []
     for i in range(len(sentences1)):
         for j in range(len(sentences2)):
+            
             if similarity_matrix[i, j] >= threshold:
                 matches.append({
                     'sentence1': sentences1[i],
@@ -295,18 +335,7 @@ def highlight_similar_parts(text, matches, is_text1=True):
     return text
 
 def calculate_document_similarity(semantic_matches, tfidf_matches, sentences1, sentences2):
-    """
-    Calculate improved document similarity using semantic and TF-IDF methods with better weighting.
-    
-    Parameters:
-    semantic_matches (list): List of semantic similarity matches
-    tfidf_matches (list): List of TF-IDF similarity matches
-    sentences1 (list): List of sentences from first document
-    sentences2 (list): List of sentences from second document
-    
-    Returns:
-    float: Overall similarity percentage
-    """
+  
     if not sentences1 or not sentences2:
         return 0.0
 
@@ -362,6 +391,21 @@ def calculate_document_similarity(semantic_matches, tfidf_matches, sentences1, s
 
 
 def compare_files(file_paths, user_id, comparison_name, semantic_threshold=0.85, tfidf_threshold=0.5):
+    """
+    Compare files and track the duration of each comparison
+    
+    Parameters:
+    file_paths (list): List of paths to the files to compare
+    user_id (int): ID of the user making the comparison
+    comparison_name (str): Name for the comparison
+    semantic_threshold (float): Threshold for semantic matching
+    tfidf_threshold (float): Threshold for TF-IDF matching
+    
+    Returns:
+    list: Results of comparisons
+    """
+    import time
+    
     raw_contents, preprocessed_contents = zip(*[read_file(fp) for fp in file_paths])
     
     file_instances = [
@@ -372,46 +416,49 @@ def compare_files(file_paths, user_id, comparison_name, semantic_threshold=0.85,
     results = []
     for i in range(len(file_instances)):
         for j in range(i + 1, len(file_instances)):
+            # Start timing
+            start_time = time.time()
+            
             sentences1 = split_into_sentences(raw_contents[i])
             sentences2 = split_into_sentences(raw_contents[j])
             
             semantic_matches = find_semantic_matches(sentences1, sentences2, threshold=semantic_threshold)
             tfidf_matches, tfidf_similarity = compute_tfidf_sentence_similarity(sentences1, sentences2, threshold=tfidf_threshold)
             
-            # Подсчет строк по категориям
+            # Count line categories
             no_match_lines = 0
             partial_match_lines = 0
             full_match_lines = 0
             
-            # Получаем все совпадения
+            # Get all matches
             all_matches = semantic_matches + tfidf_matches
             
-            # Создаем множества строк, которые уже обработаны
+            # Create sets of processed sentences
             processed_sent1 = set()
             processed_sent2 = set()
             
-            # Классифицируем каждую пару совпадений
+            # Classify each match pair
             for match in all_matches:
                 sent1 = match['sentence1']
                 sent2 = match['sentence2']
                 similarity = match['similarity']
                 
-                # Пропускаем уже обработанные строки
+                # Skip already processed sentences
                 if sent1 in processed_sent1 or sent2 in processed_sent2:
                     continue
                 
                 processed_sent1.add(sent1)
                 processed_sent2.add(sent2)
                 
-                # Классификация по уровню сходства
+                # Classify by similarity level
                 if similarity >= 0.85:
                     full_match_lines += 1
-                elif similarity >= 0.10:
+                elif similarity >= 0.50:
                     partial_match_lines += 1
                 else:
                     no_match_lines += 1
             
-            # Подсчитываем строки без совпадений
+            # Count sentences without matches
             for sent in sentences1:
                 if sent not in processed_sent1:
                     no_match_lines += 1
@@ -422,7 +469,7 @@ def compare_files(file_paths, user_id, comparison_name, semantic_threshold=0.85,
             
             total_lines = len(sentences1) + len(sentences2)
             
-            # Рассчитываем общее сходство
+            # Calculate overall similarity
             combined_similarity = calculate_document_similarity(
                 semantic_matches, tfidf_matches, sentences1, sentences2
             )
@@ -430,7 +477,11 @@ def compare_files(file_paths, user_id, comparison_name, semantic_threshold=0.85,
             highlighted_file1 = highlight_similar_parts(raw_contents[i], all_matches, is_text1=True)
             highlighted_file2 = highlight_similar_parts(raw_contents[j], all_matches, is_text1=False)
             
-            # Создаем запись сравнения с новыми полями
+            # End timing and calculate duration
+            end_time = time.time()
+            comparison_duration = end_time - start_time
+            
+            # Create comparison record with duration
             comparison = Comparison.objects.create(
                 file1=file_instances[i],
                 file2=file_instances[j],
@@ -442,10 +493,11 @@ def compare_files(file_paths, user_id, comparison_name, semantic_threshold=0.85,
                 no_match_lines_count=no_match_lines,
                 partial_match_lines_count=partial_match_lines,
                 full_match_lines_count=full_match_lines,
-                total_lines_count=total_lines
+                total_lines_count=total_lines,
+                duration=comparison_duration  # Save the duration
             )
             
-            # Обновляем results
+            # Update results
             results.append({
                 'file1': file_instances[i].filename,
                 'file2': file_instances[j].filename,
@@ -460,6 +512,7 @@ def compare_files(file_paths, user_id, comparison_name, semantic_threshold=0.85,
                 'partial_match_lines': partial_match_lines,
                 'full_match_lines': full_match_lines,
                 'total_lines': total_lines,
+                'duration': comparison_duration,  # Include duration in results
                 'comparison': comparison
             })
     
